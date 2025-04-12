@@ -174,17 +174,25 @@ import {
   ONLINE_USERS,
   START_TYPING,
   STOP_TYPING,
-  INAPPROPRIATE_MESSAGE, // Add this new event
+  INAPPROPRIATE_MESSAGE, 
+  SPAM_DETECTED,
+  BLOCK_USER,
+  USER_BLOCKED,
+  MESSAGE_BLOCKED, 
+  REPLY_MESSAGE,// Add this new event
 } from "./constants/events.js";
 import { getSockets } from "./lib/helper.js";
 import { Message } from "./models/message.js";
 import { corsOptions } from "./constants/config.js";
 import { socketAuthenticator } from "./middlewares/auth.js";
 import { checkInappropriateContent } from "./middlewares/messageFilter.js";
+import { checkSpamContent, analyzeImageForSpam, blockUser, checkUserSpamHistory } from "./middlewares/spamFilter.js"
 
 import userRoute from "./routes/user.js";
 import chatRoute from "./routes/chat.js";
 import adminRoute from "./routes/admin.js";
+
+import { WebRTCService } from "./services/webrtc.js"
 
 dotenv.config({
   path: "./.env",
@@ -213,6 +221,10 @@ const io = new Server(server, {
 
 app.set("io", io);
 
+// After initializing your Socket.io server:
+// Initialize the WebRTC service with the Socket.io instance
+const webRTCService = new WebRTCService(io)
+
 // Using Middlewares Here
 app.use(express.json());
 app.use(cookieParser());
@@ -239,11 +251,112 @@ io.on("connection", (socket) => {
   userSocketIDs.set(user._id.toString(), socket.id);
 
 
-   
+   // Handle reply messages
+  socket.on(REPLY_MESSAGE, async ({ chatId, members, message, replyToId, replyToSender, replyToContent }) => {
+    // Check if message contains inappropriate content
+    if (checkInappropriateContent(message)) {
+      // Handle inappropriate content
+      const sender = {
+        _id: user._id,
+        name: user.name,
+      }
+
+      const recipientMembers = members.filter((id) => id.toString() !== user._id.toString())
+      const membersSocket = getSockets(recipientMembers)
+
+      io.to(membersSocket).emit(INAPPROPRIATE_MESSAGE, {
+        chatId,
+        message: {
+          content: message,
+          sender,
+        },
+      })
+      return
+    }
+
+    // Check if message is spam
+    const isSpam = checkSpamContent(message, user._id.toString())
+    const hasSpamHistory = await checkUserSpamHistory(user._id)
+
+    // If spam is detected, notify recipients
+    if (isSpam || hasSpamHistory) {
+      const recipientMembers = members.filter((id) => id.toString() !== user._id.toString())
+      const membersSocket = getSockets(recipientMembers)
+
+      io.to(membersSocket).emit(SPAM_DETECTED, {
+        chatId,
+        message: {
+          content: message,
+          sender: {
+            _id: user._id,
+            name: user.name,
+          },
+        },
+      })
+
+      // Mark message as spam in database
+      const messageForDB = {
+        content: message,
+        sender: user._id,
+        chat: chatId,
+        replyTo: replyToId,
+        isSpam: true,
+      }
+
+      try {
+        await Message.create(messageForDB)
+      } catch (error) {
+        console.error("Error saving spam message:", error)
+      }
+
+      return // Don't process further if spam
+    }
+
+    // Create message for real-time display
+    const messageForRealTime = {
+      content: message,
+      _id: uuid(),
+      sender: {
+        _id: user._id,
+        name: user.name,
+      },
+      chat: chatId,
+      createdAt: new Date().toISOString(),
+      replyTo: replyToId,
+      replyToMessage: {
+        _id: replyToId,
+        content: replyToContent,
+        sender: replyToSender,
+      },
+    }
+
+    // Create message for database
+    const messageForDB = {
+      content: message,
+      sender: user._id,
+      chat: chatId,
+      replyTo: replyToId,
+    }
+
+    // Send to all members
+    const membersSocket = getSockets(members)
+    io.to(membersSocket).emit(REPLY_MESSAGE, {
+      chatId,
+      message: messageForRealTime,
+    })
+    io.to(membersSocket).emit(NEW_MESSAGE_ALERT, { chatId })
+
+    try {
+      await Message.create(messageForDB)
+    } catch (error) {
+      throw new Error(error)
+    }
+  })
+
    
   
 
-  socket.on(NEW_MESSAGE, async ({ chatId, members, message }) => {
+  socket.on(NEW_MESSAGE, async ({ chatId, members, message, attachments = []  }) => {
     // Check if message contains inappropriate content
     if (checkInappropriateContent(message)) {
       // Get the sender's information
@@ -268,6 +381,68 @@ io.on("connection", (socket) => {
       });
     }
 
+    // NEW: Check if message is spam
+    const isSpam = checkSpamContent(message, user._id.toString())
+    let isImageSpam = false
+
+    // Check if there are image attachments to analyze
+    if (attachments && attachments.length > 0) {
+      for (const attachment of attachments) {
+        if (
+          attachment.url &&
+          (attachment.url.endsWith(".jpg") ||
+            attachment.url.endsWith(".jpeg") ||
+            attachment.url.endsWith(".png") ||
+            attachment.url.endsWith(".gif"))
+        ) {
+          isImageSpam = await analyzeImageForSpam(attachment.url)
+          if (isImageSpam) break
+        }
+      }
+    }
+
+    // Also check user's spam history
+    const hasSpamHistory = await checkUserSpamHistory(user._id)
+
+    // If spam is detected, notify recipients
+    if (isSpam || isImageSpam || hasSpamHistory) {
+      const recipientMembers = members.filter((id) => id.toString() !== user._id.toString())
+      const membersSocket = getSockets(recipientMembers)
+
+      io.to(membersSocket).emit(SPAM_DETECTED, {
+        chatId,
+        message: {
+          content: message,
+          sender: {
+            _id: user._id,
+            name: user.name,
+          },
+        },
+      })
+
+      // Mark message as spam in database
+      const messageForDB = {
+        content: message,
+        sender: user._id,
+        chat: chatId,
+        isSpam: true,
+      }
+
+      if (attachments && attachments.length > 0) {
+        messageForDB.attachments = attachments
+      }
+
+      try {
+        await Message.create(messageForDB)
+      } catch (error) {
+        console.error("Error saving spam message:", error)
+      }
+
+      return // Don't process further if spam
+    }
+
+
+
     // Continue with normal message processing
     const messageForRealTime = {
       content: message,
@@ -279,12 +454,20 @@ io.on("connection", (socket) => {
       chat: chatId,
       createdAt: new Date().toISOString(),
     };
-    
+
+    if (attachments && attachments.length > 0) {
+      messageForRealTime.attachments = attachments
+    }
+
     const messageForDB = {
       content: message,
       sender: user._id,
       chat: chatId,
     };
+
+    if (attachments && attachments.length > 0) {
+      messageForDB.attachments = attachments
+    }
 
     const membersSocket = getSockets(members);
     io.to(membersSocket).emit(NEW_MESSAGE, {
@@ -299,6 +482,40 @@ io.on("connection", (socket) => {
       throw new Error(error);
     }
   });
+
+  // NEW: Handle block user request
+  socket.on(BLOCK_USER, async ({ userId }) => {
+    try {
+      const success = await blockUser(userId, user._id.toString())
+
+      if (success) {
+        // Notify the blocked user
+        const blockedUserSocketId = userSocketIDs.get(userId)
+
+        if (blockedUserSocketId) {
+          io.to(blockedUserSocketId).emit(USER_BLOCKED, {
+            blockedBy: {
+              _id: user._id,
+              name: user.name,
+            },
+          })
+        }
+
+        // Notify the user who blocked
+        socket.emit(MESSAGE_BLOCKED, {
+          message: `You have successfully blocked the user.`,
+          blockedUserId: userId,
+        })
+      }
+    } catch (error) {
+      console.error("Error blocking user:", error)
+      socket.emit(MESSAGE_BLOCKED, {
+        message: `Failed to block user. Please try again.`,
+        error: true,
+      })
+    }
+  })
+
 
   socket.on(START_TYPING, ({ members, chatId }) => {
     const membersSockets = getSockets(members);

@@ -20,6 +20,20 @@ const ONLINE_USERS = "ONLINE_USERS";
 
  const MESSAGE_BLOCKED = "message-blocked"; // Add this new event
 
+ export const SPAM_DETECTED = "spam-detected"
+export const BLOCK_USER = "block-user"
+export const USER_BLOCKED = "user-blocked";
+export const REPLY_MESSAGE = "reply-message"
+//export const MESSAGE_BLOCKED = "message-blocked"
+//export const INAPPROPRIATE_MESSAGE = "inappropriate-message"
+
+export const CALL_USER = "call-user"
+export const INCOMING_CALL = "incoming-call"
+export const CALL_ANSWERED = "call-answered"
+export const CALL_REJECTED = "call-rejected"
+export const ICE_CANDIDATE = "ice-candidate"
+export const END_CALL = "end-call"
+
 export {
   MESSAGE_BLOCKED,
   INAPPROPRIATE_MESSAGE,

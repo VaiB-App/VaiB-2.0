@@ -1,10 +1,57 @@
 import mongoose, { Schema, model } from "mongoose";
 import bcrypt from "bcrypt";
 
-const schema = new Schema(
+// const schema = new Schema(
+//   {
+    
+    
+//     name: {
+//       type: String,
+//       required: true,
+//     },
+//     username: {
+//       type: String,
+//       required: true,
+//       unique: true,
+//     },
+//     password: {
+//       type: String,
+//       required: true,
+//       select: false,
+//     },
+//     avatar: {
+//       public_id: {
+//         type: String,
+//         required: true,
+//       },
+//       url: {
+//         type: String,
+//         required: true,
+//       },
+//     },
+//     bio: {
+//       type: String,
+//       required: true,
+//     },
+//     friends: {
+//       type: [mongoose.Schema.Types.ObjectId],
+//       ref: "User",
+//       default: [],
+//     },
+//     blockedUsers: {
+//       type: [mongoose.Schema.Types.ObjectId],
+//       ref: "User",
+//       default: [],
+//     },
+//   },
+//   {
+//     timestamps: true,
+//   }
+// );
+
+
+const schema = new mongoose.Schema(
   {
-    
-    
     name: {
       type: String,
       required: true,
@@ -29,25 +76,24 @@ const schema = new Schema(
         required: true,
       },
     },
-    bio: {
-      type: String,
-      required: true,
-    },
-    friends: {
-      type: [mongoose.Schema.Types.ObjectId],
-      ref: "User",
-      default: [],
-    },
-    blockedUsers: {
-      type: [mongoose.Schema.Types.ObjectId],
-      ref: "User",
-      default: [],
+    blockedUsers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    spamReportCount: {
+      type: Number,
+      default: 0,
     },
   },
   {
     timestamps: true,
-  }
+  },
 );
+
+
+
 
 // schema.pre("save", async function (next) {
 //   if (!this.isModified("password")) return next();

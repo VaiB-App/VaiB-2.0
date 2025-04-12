@@ -36,7 +36,7 @@ const schema = new Schema(
 
 const messageSchema = new mongoose.Schema({
   sender: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: Types.ObjectId,
     ref: 'User',
     required: true,
   },
@@ -45,7 +45,7 @@ const messageSchema = new mongoose.Schema({
     required: true,
   },
   chat: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: Types.ObjectId,
     ref: 'Chat',
     required: true,
   },

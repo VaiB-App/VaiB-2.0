@@ -1,6 +1,6 @@
 const corsOptions = {
   origin: [
-    "http://localhost:5180",
+    "http://localhost:5173",
     
     process.env.CLIENT_URL,
   ],

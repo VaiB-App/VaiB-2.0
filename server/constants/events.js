@@ -18,8 +18,18 @@ const ONLINE_USERS = "ONLINE_USERS";
  const INAPPROPRIATE_MESSAGE = "inappropriate-message"
 
 const MESSAGE_BLOCKED = "message-blocked";
-export const USER_BLOCKED = "user_blocked";
-export const USER_UNBLOCKED = "user_unblocked";
+ const USER_BLOCKED = "user_blocked";
+ const USER_UNBLOCKED = "user_unblocked";
+  const SPAM_DETECTED = "spam-detected";
+   const BLOCK_USER = "block-user";
+   const REPLY_MESSAGE = "reply-message"
+
+   export const CALL_USER = "call-user"
+export const INCOMING_CALL = "incoming-call"
+export const CALL_ANSWERED = "call-answered"
+export const CALL_REJECTED = "call-rejected"
+export const ICE_CANDIDATE = "ice-candidate"
+export const END_CALL = "end-call"
 
 export {
   MESSAGE_BLOCKED,
@@ -35,4 +45,10 @@ export {
   CHAT_JOINED,
   CHAT_LEAVED,
   ONLINE_USERS,
+  USER_BLOCKED,
+USER_UNBLOCKED,
+SPAM_DETECTED,
+BLOCK_USER,
+REPLY_MESSAGE
+
 };
